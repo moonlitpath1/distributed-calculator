@@ -26,9 +26,13 @@ distributed_calculator/
 ====================================================================
 
 PREREQUISITES:
-- Java Development Kit (JDK) version 8 or higher (Java 8+ recommended)
+- Java Development Kit (JDK) version 8 or higher (Java 8+ recommended; JDK 11 or JDK 17 recommended)
 - Java runtime must be on the system PATH
 - Verify: java -version and javac -version
+- On Termux (Android): `pkg install openjdk-17` or `pkg install openjdk-11`
+- On Arch Linux: `pacman -Sy jdk11-openjdk`
+- On Debian/Ubuntu: `apt-get install openjdk-11-jdk`
+- On macOS: `brew install openjdk`
 
 STEP 1: Compile all Java files
 ---------------------------
@@ -45,27 +49,54 @@ This will generate .class files for all four files:
 STEP 2: Start the RMI Registry and Server
 ------------------------------------------
 In one terminal window:
-  # Option A: Using the run script (recommended)
-  ./run_server.sh
 
-  # Option B: Manual startup
-  # First, start the RMI Registry:
-  rmiregistry &
+# Option A: Using the run script (recommended)
+./run_server.sh
 
-  # Then, start the server:
-  java Server
+# Option B: Manual startup
+# First, start the RMI Registry:
+rmiregistry &
+
+# Then, start the server:
+java Server
 
 The RMI Registry will start on port 1099 by default.
 You should see: "RMI Registry created at port 1099" and
                   "Calculator server is ready."
+
+# DISTRIBUTED SETUP: Server on PC, Client on Phone (Termux)
+# To run the server on one computer and the client on another device:
+#
+# 1. On the server computer, find its local IP address:
+#    - Linux: ip addr show | grep 'inet ' | grep -v 127.0.0.1
+#    - macOS: ifconfig | grep inet
+#    - Windows: ipconfig
+#    Example: 192.168.1.15 or 10.42.0.242
+#
+# 2. Start the server: java Server
+#    Keep this terminal open — the server must stay running.
+#
+# 3. On the client device, install Termux and JDK:
+#    pkg install openjdk-17 (Termux)
+#
+# 4. On the client device, navigate to the project and run:
+#    java Client <server-IP>
+#    Example: java Client 192.168.1.15
+#
+# 5. Test operations in the client terminal.
+#
+# Note: Both devices must be on the same WiFi network for this to work.
 
 STEP 3: Start the Client
 ------------------------
 In a SEPARATE terminal window (keep the server running):
   ./run_client.sh
 
-  # Or manually:
-  java Client
+# Or manually:
+java Client
+
+# To connect to a remote server:
+java Client <server-IP>
 
 The client will connect to the Calculator service via RMI.
 You should see: "Connected to Calculator service via RMI."
@@ -84,7 +115,7 @@ All clients can connect to and use the server simultaneously
 because RMI's UnicastRemoteObject handles concurrent requests.
 
 STEP 6: Shutdown
------------------
+----------------
 Terminate the client with Ctrl+C.
 Terminate the server with Ctrl+C.
 Kill the rmiregistry process: pkill rmiregistry
@@ -99,8 +130,8 @@ Kill the rmiregistry process: pkill rmiregistry
     | (runs java Client)  |          | (runs java Server)  |
     |                     |          |                     |
     +---------------------+          +--------+------------+
-                                                 |
-                                                 | Registry
+                                                |
+                                                | Registry
     +---------------------+          +--------v------------+
     |                     |          |                   |
     |      CLIENT 2       |          | CalculatorImpl    |
@@ -133,7 +164,7 @@ ARCHITECTURE DESCRIPTION:
    - Extends UnicastRemoteObject for RMI infrastructure integration
    - Implements all arithmetic operations: add, subtract, multiply, divide
    - Handles division by zero with ArithmeticException
-   - RMI automatically generates stubs and skeletons (proxy objects)
+   - RMI automatically generates stubs and proxies
 
 5. Communication Flow
    - Client → RMI Registry: Naming.lookup() to find the "Calculator" binding
@@ -143,7 +174,7 @@ ARCHITECTURE DESCRIPTION:
    - The wire protocol uses Java serialization (or optionally, binary protocols)
 
 KEY RMI CONCEPTS:
-- Stub: Client-side proxy that forward method calls to the remote object
+- Stub: Client-side proxy that forwards method calls to the remote object
 - Skeleton: Server-side stub (deprecated in newer Java versions, replaced by UnicastRemoteObject)
 - Registry: Naming service for discovering remote objects
 - RemoteException: Must be declared/thrown for all remote method calls
@@ -160,7 +191,7 @@ Calculator server is ready.
 Remote object registered as: Calculator
 Calculator server is ready.
 
---- CLIENT 1 TERMINAL ---
+--- CLIENT 1 TERMINAL (ADDITION) ---
 $ java Client
 Connected to Calculator service via RMI.
 === Distributed Calculator Client ===
@@ -174,18 +205,6 @@ Choose operation (1-5, 0 to exit): 1
 Enter first number: 12.5
 Enter second number: 7.3
 Result (Addition): 19.80
-
-=== Distributed Calculator Client ===
-1. Addition
-2. Subtraction
-3. Multiplication
-4. Division
-0. Exit
-=====================================
-Choose operation (1-5, 0 to exit): 2
-Enter first number: 15.0
-Enter second number: 6.2
-Result (Subtraction): 8.80
 
 --- CLIENT 2 TERMINAL (CONCURRENT TEST) ---
 $ java Client
@@ -232,44 +251,44 @@ and displays "Error: Division by zero is not allowed" instead of crashing.
 (Generated as text diagram - use any diagramming tool for SVG)
 
 +---------------------------------------------------------------------------+
-|                        DISTRIBUTED CALCULATOR RMI                         |
+||                        DISTRIBUTED CALCULATOR RMI                         |
 +===========================================================================+
-|  +----------------------+                                                   |
-|  |  +----------------+  |                                                   |
-|  |  |   CLIENT 1     |  |  RMI Protocol (stub/skeleton, serialization)    |
-|  |  | (runs java)    |  |                                                   |
-|  |  +--------+-------+  |                                                   |
-|  +------------+--------+           +-----------------+-----------------+  |
-  +----------------------+           |                 |                 |
-                              |         RMI Registry  |  Naming Service |
-                              |  (Port 1099)        |                 |
-                              +----------+----------+                 |
-                                       |  Naming.lookup("rmi://host:port/Calculator")
-                                       v                 |
-                              +----------+----------+                 |
-                              |  +----------------+  |                 |
-                              |  |   CLIENT 2     |  |                 |
-                              |  | (runs java)   |  |                 |
-                              |  +--------+-------+  |                 |
-                              +------------+--------+                 |
-                                         |                 |
-               +---------------------+-----------------+-----------------+
-               |                                                 |                 |
-    +----------v--------+                        +-----v------+   +----v------+
-    |                   |                        |             |   |             |
-    |   +------------+   |                        |  RMI Registry|   |Calculator |
-    |   | Server     |   |  LocateRegistry    | (Port 1099)  |   |Impl       |
-    |   | (runs java) |   |  createRegistry  |              |   | (remote)  |
-    |   +-------+-------+                        +------------+   +----+------+
-    +----------+----------+                         |              |
-               |                                   |              |
-               |  rebind("Calculator", calculator)   |              |
-               v                                   v              v
-      +----------v--------+                +-----v------+  +-----v------+
-      |                   |                |            |  |            |
-      |   RMI Registry    |                |   Calculator|  |   Clients  |
-      |   (binds name)    |                |   Interface  |  | (stubs)    |
-      +-------------------+                +-------------+  +------------+
+||  +----------------------+                                                   |
+||  |  +----------------+  |  RMI Protocol (stub/skeleton, serialization)    |
+||  |  |   CLIENT 1     |  |                                                   |
+||  |  | (runs java)    |  |                                                   |
+||  |  +--------+-------+  |                                                   |
+||  +------------+--------+           +-----------------+-----------------+  |
+|  +----------------------+           |                 |                 |
+||                              |         RMI Registry  |  Naming Service |
+||                              |  (Port 1099)        |                 |
+||                              +----------+----------+                 |
+||                                       |  Naming.lookup("rmi://host:port/Calculator")|
+||                                       v                 |
+||                              +----------+----------+                 |
+||                              |  +----------------+  |                 |
+||                              |  |   CLIENT 2     |  |                 |
+||                              |  | (runs java)   |  |                 |
+||                              |  +--------+-------+  |                 |
+||                              +------------+--------+                 |
+||                                        |                 |
+||               +---------------------+-----------------+-----------------|
+||               |                                                 |                 |
+|    +----------v--------+                        +-----v------+   +----v------+
+|    |                   |                        |             |   |             |
+|    |   +------------+   |                        |  RMI Registry|   |Calculator |
+|    |   | Server     |   |  LocateRegistry    | (Port 1099)  |   |Impl       |
+|    |   | (runs java) |   |  createRegistry  |              |   | (remote)  |
+|    |   +-------+-------+                        +------------+   +----+------+
+|    +----------+----------+                         |              |
+||               |                                   |              |
+||               |  rebind("Calculator", calculator)   |              |
+||               v                                   v              v
+||      +----------v--------+                +-----v------+  +-----v------+
+||      |                   |                |            |  |            |
+||      |   RMI Registry    |                |   Calculator|  |   Clients  |
+||      |   (binds name)    |                |   Interface  |  | (stubs)    |
+||      +-------------------+                +-------------+  +------------+
 
 ====================================================================
 6. VIVA QUESTIONS AND ANSWERS
@@ -281,7 +300,7 @@ A1: Java RMI (Remote Method Invocation) is a Java API that allows an object
     Core components:
     - Stub: Client-side proxy that forwards method calls to the remote object
     - Skeleton: Server-side counterpart (deprecated in Java 2.x, replaced by
-      UnicastRemoteObject)  
+      UnicastRemoteObject) 
     - Registry: Naming service that binds remote object names to their stubs
     - Remote interface: Must be extended by all remotely accessible objects
     - RemoteException: Must be declared/thrown for all remote method signatures
@@ -343,20 +362,16 @@ A8:
       specified port. If a registry already exists on that port, it throws a
       java.rmi.server.ExportException. Used when starting the server for the first
       time or when ensuring a fresh registry.
-    
     - LocateRegistry.getRegistry(String host, int port): Returns the existing RMI
       Registry running on the specified host and port. If no registry exists, it
       can optionally create one if called with specific parameters. Used when a
       client wants to connect to an already-running registry, or when the server
       has already created the registry.
-    
-    In our implementation, the Server uses createRegistry(1099) to ensure the
-    registry exists before binding the remote object.
+    - In our implementation, the Server uses createRegistry(1099) to ensure the
+      registry exists before binding the remote object.
 
-====================================================================
-7. JAVA VERSION REQUIREMENTS
-====================================================================
-
+Q8: Java Version Requirements
+-----------------------------
 - Minimum: JDK 8 (Java 8, version 1.8.x)
 - Recommended: JDK 11 or JDK 17 (latest LTS versions)
 - The code uses only standard Java RMI libraries (no external dependencies)
@@ -374,7 +389,7 @@ If Java is not installed, install the JDK from:
   - OpenJDK: apt-get install openjdk-11-jdk (Linux) or brew install openjdk (macOS)
 
 ====================================================================
-8. QUICK START COMMANDS SUMMARY
+7. QUICK START COMMANDS SUMMARY
 ====================================================================
 
 $ cd /home/anu/Projects/distributed_calculator
